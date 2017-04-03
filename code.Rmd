@@ -1,0 +1,134 @@
+---
+title: "Report"
+output: word_document
+---
+
+
+
+```{r,echo=FALSE}
+library(ggplot2)
+library(dplyr)
+library(MASS)
+data <- read.csv("C:/Users/dexter/Desktop/project abalon/data.txt", header=TRUE, col.names = c("Sex","Length","Diameter","Height","Whole.Weight","Shucked.Weight","Viscera.Weight","Shell.Weight","Rings"))
+str(data)
+Data <- subset(data, select = -c(Shucked.Weight, Viscera.Weight, Shell.Weight))
+ggplot(Data, aes(x = Rings, fill = Sex)) + geom_bar(binwidth = 1, color = "blue", 
+    origin = min(Data$Rings), position = "identity")  + ylab("Number of abalone") + 
+    ggtitle("Number of abalone with different Rings") + facet_wrap(~Sex, ncol = 3)
+Age = c(rep(0, nrow(data)))
+for (i in 1:nrow(data)) {
+    if (data[i, ]$Rings < 7) 
+        Age[i] = 1
+    if (data[i, ]$Rings >= 7 & data[i, ]$Rings <= 13) 
+        Age[i] = 2
+    if (data[i, ]$Rings > 13) 
+        Age[i] = 3
+}
+gData = cbind(data, Age)
+head(gData)
+```
+
+
+```{r}
+g11<-ggplot(gData, aes(x=Diameter, y= Height))+geom_point(aes(color=Sex))+ggtitle("Diameter vs Height")
+g11
+g12<-ggplot(gData, aes(x=Whole.Weight, y= Height))+geom_point(aes(color=Sex))+ggtitle("Whole Weight vs Height")
+g12
+gData <- subset(gData, Height < 0.3)
+```
+
+
+```{r}
+pairs(gData[,-1])
+cor(gData[,-1])
+gData2<- scale(gData[,-1], center = TRUE, scale=TRUE)
+gData2<- as.data.frame(gData2)
+cor(gData2)
+g1<-ggplot(gData, aes(x=Height, y= Age))+geom_point(aes(color=Sex))+ggtitle("Age vs Height")
+g1
+g2<-ggplot(gData, aes(x=Diameter, y= Age))+geom_point(aes(color=Sex))+ggtitle("Age vs Diameter")
+g2
+g3<-ggplot(gData, aes(x=Whole.Weight, y= Age))+geom_point(aes(color=Sex))+ggtitle("Age vs Whole Weight")
+g3
+g4<-ggplot(gData, aes(x=Length, y= Age))+geom_point(aes(color=Sex))+ggtitle("Age vs Length")
+g4
+g5<-ggplot(gData, aes(x=Rings, y= Age))+geom_point(aes(color=Sex))+ggtitle("Age vs Rings")
+g5
+g6<-ggplot(gData, aes(x=Height, y= as.factor(Sex)))+geom_point(aes(color=Sex))+ggtitle("Age vs Rings")
+g6
+```
+
+
+##CHUNK 4
+```{r,echo=FALSE}
+train_data<- gData[1:2757,]
+step(lm(Age~Length+Diameter+Height+Whole.Weight+Viscera.Weight+Shell.Weight+Rings, data=train_data), direction="backward")
+fit<- lm(Age ~ Length + Height + Whole.Weight + Rings, data=gData)
+resid<-resid(fit)
+yhat<-predict(fit)
+summary(fit)
+anova(fit)
+library(MASS)
+lda(Age~Length+Diameter+Height+Whole.Weight+Viscera.Weight+Shell.Weight+Rings, data=train_data)
+lda(factor(Sex)~Length+Diameter+Height+Whole.Weight+Viscera.Weight+Shell.Weight+Rings, data=train_data)
+```
+
+
+
+```{r, echo=FALSE}
+library(rpart)
+library(tree)
+library(randomForest)
+set.seed(123)
+tree1<- rpart(Age~Length+Height+Whole.Weight+Diameter+Viscera.Weight+Shell.Weight,data=train_data,control = rpart.control(cp = 0.01))
+printcp(tree1)
+fit2<- randomForest(Age~Length+Height+Whole.Weight+Diameter+Viscera.Weight+Shell.Weight, data=train_data)
+varImpPlot(fit2)
+plot(fit2)
+bestcp <- tree1$cptable[which.min(tree1$cptable[,"xerror"]),"CP"]
+tree.pruned <- prune(tree1, cp = bestcp)
+tree.pruned
+plot(tree.pruned)
+text(tree.pruned)
+```
+
+```{r,echo=FALSE}
+tree2<- rpart(factor(Sex)~Length+Height+Whole.Weight+Diameter+Viscera.Weight+Shell.Weight,data=train_data,control = rpart.control(cp = 0.001))
+printcp(tree2)
+fit2<- randomForest(factor(Sex)~Length+Height+Whole.Weight+Diameter+Viscera.Weight+Shell.Weight, data=train_data)
+varImpPlot(fit2)
+plot(fit2)
+bestcp <- tree2$cptable[which.min(tree2$cptable[,"xerror"]),"CP"]
+tree.pruned <- prune(tree2, cp = bestcp)
+tree.pruned
+plot(tree.pruned)
+text(tree.pruned)
+```
+
+```{r, echo=FALSE}
+library(MASS)
+lda1<-lda(Age~Length+Diameter+Height+Whole.Weight+Viscera.Weight+Shell.Weight, data= gData)
+lda1
+pred1 <- predict(lda1)$class
+pred1
+newdataL1 <- with(gData, data.frame(Weight = Whole.Weight, Sex = Sex, Age = Age, 
+    Pred_Age1 = pred1))
+Data_misL1 = subset(newdataL1, Age != Pred_Age1)
+p1 = ggplot(Data_misL1, aes(x = Age, fill = Sex)) + geom_bar(binwidth = 1/2, 
+    color = "darkgrey") + ylab("Number of mis-classfied data") + ggtitle(" Using all predictors") + 
+    theme(axis.text.x = element_text(angle = 90)) + scale_fill_brewer("Sex", 
+    type = "qual", palette = 3)
+p1
+ggplot(newdataL1, aes(x = Pred_Age1, y = Age, colour = factor(Pred_Age1 == Age))) + 
+    geom_point(position = "jitter") + scale_colour_manual("Age Group", values = c("2", 
+    "3"), labels = c("Wong Classification", "Right Classification")) + ggtitle("Classification using Feature Vectors")
+```
+
+
+
+```{r,echo=FALSE}
+lda2<-lda(factor(Sex)~Length+Diameter+Height+Whole.Weight+Viscera.Weight+Shell.Weight, data= gData)
+lda2
+pred2 <- predict(lda2)$class
+head(pred2)
+```
